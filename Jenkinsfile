@@ -1,66 +1,165 @@
-
 pipeline {
     agent any
 
     environment {
+        // ⭐ CORRECTION: Utilisez votre vrai repository Docker Hub
         DOCKER_IMAGE = "ahmedwolf/spring-test1"
         DOCKER_TAG = "latest"
     }
 
     stages {
+        // ===== STAGE 1: CHECKOUT =====
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM',
-                          branches: [[name: '*/main']],
-                          userRemoteConfigs: [[url: 'https://github.com/Ahmeddhib/StudentsManagement-DevOps.git']],
-                          extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: false, timeout: 10]]
+                echo "📥 CHECKOUT CODE"
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/Ahmeddhib/StudentsManagement-DevOps.git',
+                        credentialsId: 'ahmedwolf'  // ⭐ AJOUTER CREDENTIALS
+                    ]],
+                    extensions: [[$class: 'CloneOption', shallow: true, depth: 1]]
                 ])
+                
+                sh '''
+                    echo "✅ Code récupéré"
+                    ls -la
+                    echo ""
+                    echo "🔍 Vérification Dockerfile:"
+                    if [ -f "Dockerfile" ]; then
+                        echo "✅ Dockerfile trouvé"
+                        cat Dockerfile
+                    else
+                        echo "❌ Dockerfile non trouvé!"
+                        exit 1
+                    fi
+                '''
             }
         }
 
-        stage('Check Docker Image') {
+        // ===== STAGE 2: VÉRIFICATION DOCKER =====
+        stage('Vérification Docker') {
             steps {
                 script {
-                    def imageExists = sh(script: "docker image inspect ${DOCKER_IMAGE}:${DOCKER_TAG} > /dev/null 2>&1 || echo 'no'", returnStdout: true).trim()
-                    if(imageExists == "no") {
-                        env.BUILD_MAVEN = "true"
-                    } else {
-                        env.BUILD_MAVEN = "false"
+                    echo "🔍 VÉRIFICATION DOCKER"
+                    
+                    // Test 1: Docker est-il installé?
+                    sh '''
+                        echo "=== DOCKER VERSION ==="
+                        docker --version || echo "❌ Docker non installé"
+                    '''
+                    
+                    // Test 2: L'image existe-t-elle déjà?
+                    try {
+                        sh "docker image inspect ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} > /dev/null 2>&1"
+                        echo "✅ Image Docker existe déjà"
+                        env.BUILD_NEEDED = "false"
+                    } catch (Exception e) {
+                        echo "ℹ️ Image Docker n'existe pas, besoin de build"
+                        env.BUILD_NEEDED = "true"
                     }
-                    echo "Build Maven needed? ${env.BUILD_MAVEN}"
+                    
+                    echo "Build nécessaire? ${env.BUILD_NEEDED}"
                 }
             }
         }
 
-        stage('Build Maven Project') {
+        // ===== STAGE 3: BUILD MAVEN =====
+        stage('Build Maven') {
             when {
-                expression { env.BUILD_MAVEN == "true" }
+                expression { env.BUILD_NEEDED == "true" }
             }
             steps {
-                sh 'mvn clean install -DskipTests -B'
+                echo "🔨 BUILD MAVEN"
+                
+                sh '''
+                    echo "🧹 Nettoyage..."
+                    mvn clean || echo "Clean échoué, continuation..."
+                    
+                    echo "📦 Packaging..."
+                    mvn package -DskipTests -B
+                    
+                    echo "✅ JAR créé:"
+                    ls -lh target/*.jar
+                '''
             }
         }
 
+        // ===== STAGE 4: BUILD DOCKER =====
         stage('Build Docker Image') {
             when {
-                expression { env.BUILD_MAVEN == "true" }
+                expression { env.BUILD_NEEDED == "true" }
             }
             steps {
+                echo "🐳 BUILD DOCKER IMAGE"
+                
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                    // D'abord, télécharger les images de base
+                    sh '''
+                        echo "📥 Téléchargement des images de base..."
+                        docker pull maven:3.8.6-amazoncorretto-17 || true
+                        docker pull amazoncorretto:17-alpine || true
+                    '''
+                    
+                    // Ensuite builder
+                    sh """
+                        echo "🔨 Construction de l'image Docker..."
+                        docker build \\
+                            --no-cache \\
+                            -t ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} \\
+                            .
+                        
+                        echo "✅ Image construite:"
+                        docker images | grep ${env.DOCKER_IMAGE}
+                    """
                 }
             }
         }
 
+        // ===== STAGE 5: PUSH DOCKER =====
         stage('Push Docker Image') {
             steps {
+                echo "📤 PUSH TO DOCKER HUB"
+                
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'ahmeddhib', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh '''
+                    // ⭐ CORRECTION: Utilisez le bon ID de credentials
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-hub-credentials',  // ⭐ CORRIGER ICI
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo "🔐 Authentification Docker Hub..."
                             echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                        '''
+                            
+                            echo "📤 Pushing image..."
+                            docker push ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}
+                            
+                            echo "✅ Image poussée avec succès!"
+                            echo "🔗 https://hub.docker.com/r/${env.DOCKER_IMAGE}"
+                        """
                     }
+                }
+            }
+        }
+        
+        // ===== STAGE 6: TEST DOCKER =====
+        stage('Test Docker Image') {
+            steps {
+                echo "🧪 TEST DOCKER IMAGE"
+                
+                script {
+                    sh """
+                        echo "🚀 Lancement du conteneur de test..."
+                        
+                        # Lancer un conteneur temporaire
+                        docker run --rm \\
+                            ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} \\
+                            java -version
+                        
+                        echo "✅ Image Docker fonctionnelle!"
+                    """
                 }
             }
         }
@@ -68,7 +167,24 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline terminée ✅"
+            echo "🧹 NETTOYAGE"
+            sh '''
+                echo "Nettoyage des images intermédiaires..."
+                docker images -f "dangling=true" -q | xargs -r docker rmi 2>/dev/null || true
+            '''
+            
+            echo "📊 RÉSUMÉ DU BUILD"
+            echo "Image: ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}"
+            echo "Statut: ${currentBuild.currentResult}"
+        }
+        
+        success {
+            echo "🎉 PIPELINE RÉUSSIE!"
+        }
+        
+        failure {
+            echo "❌ PIPELINE ÉCHOUÉE"
+            echo "Consultez les logs pour les erreurs"
         }
     }
 }
