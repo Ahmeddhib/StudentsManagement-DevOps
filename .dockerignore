@@ -1,0 +1,10 @@
+target/
+.git
+.mvn/
+logs/
+*.log
+*.jar
+*.war
+*.ear
+.DS_Store
+.env
