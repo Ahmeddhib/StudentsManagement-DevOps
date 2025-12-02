@@ -1,33 +1,9 @@
-[23:01, 02/12/2025] Nesrine Romdhani: pipeline {
+
+pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "nesrineromd/projet_devos"
-    }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                // Clone rapide, shallow clone pour gagner du temps
-                checkout([$class: 'GitSCM',
-                          branches: [[name: '*/main']],
-                          userRemoteConfigs: [[url: 'https://github.com/nesrrine/projet_devos.git']],
-                          extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: false, reference: '', timeout: 10]]
-                ])
-            }
-        }
-
-        stage('Clean & Build') {
-            steps {
-                // Build Maven
-                sh 'mvn clean install -DskipTests -B'
-            }
-        …
-[23:05, 02/12/2025] Nesrine Romdhani: hthhaaaaaaaaaa shihh pipeline {
-    agent any
-
-    environment {
-        DOCKER_IMAGE = "nesrineromd/projet_devos"
+        DOCKER_IMAGE = "ahmedwolf/spring-test1"
         DOCKER_TAG = "latest"
     }
 
@@ -36,7 +12,7 @@
             steps {
                 checkout([$class: 'GitSCM',
                           branches: [[name: '*/main']],
-                          userRemoteConfigs: [[url: 'https://github.com/nesrrine/projet_devos.git']],
+                          userRemoteConfigs: [[url: 'https://github.com/Ahmeddhib/StudentsManagement-DevOps.git']],
                           extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: false, timeout: 10]]
                 ])
             }
@@ -79,7 +55,7 @@
         stage('Push Docker Image') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    withCredentials([usernamePassword(credentialsId: 'ahmeddhib', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh '''
                             echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
                             docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
