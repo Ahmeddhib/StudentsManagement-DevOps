@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "ahmedwolf/spring-test1"
+        DOCKER_IMAGE = "ahmedwolf/spring-test2"
         DOCKER_TAG = "latest"
     }
 
