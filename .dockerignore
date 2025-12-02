@@ -3,8 +3,6 @@ target/
 .mvn/
 logs/
 *.log
-*.jar
-*.war
-*.ear
 .DS_Store
 .env
+docker-compose.yml
