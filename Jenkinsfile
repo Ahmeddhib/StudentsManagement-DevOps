@@ -4,6 +4,8 @@ pipeline {
     environment {
         DOCKER_IMAGE = "ahmedwolf/spring-test3"
         DOCKER_TAG = "latest"
+        K8S_NAMESPACE = "devops"
+        APP_NAME = "student-management"
     }
 
     stages {
@@ -17,49 +19,84 @@ pipeline {
             }
         }
 
-        stage('Check Docker Image') {
+        stage('Build Maven Project') {
             steps {
-                script {
-                    def imageExists = sh(script: "docker image inspect ${DOCKER_IMAGE}:${DOCKER_TAG} > /dev/null 2>&1 || echo 'no'", returnStdout: true).trim()
-                    if(imageExists == "no") {
-                        env.BUILD_MAVEN = "true"
-                    } else {
-                        env.BUILD_MAVEN = "false"
-                    }
-                    echo "Build Maven needed? ${env.BUILD_MAVEN}"
-                }
+                sh 'mvn clean package -DskipTests -B'
             }
         }
 
-        stage('Build Maven Project') {
-            when {
-                expression { env.BUILD_MAVEN == "true" }
-            }
+        stage('SonarQube Analysis') {
             steps {
-                sh 'mvn clean install -DskipTests -B'
+                withSonarQubeEnv('sonarqube') {
+                    sh 'mvn sonar:sonar \
+                        -Dsonar.projectKey=student-management \
+                        -Dsonar.host.url=http://192.168.49.2:30010 \
+                        -Dsonar.login=admin \
+                        -Dsonar.password=sonar'
+                }
             }
         }
 
         stage('Build Docker Image') {
-            when {
-                expression { env.BUILD_MAVEN == "true" }
-            }
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                    // Utiliser l'environnement Docker de Minikube
+                    sh '''
+                        eval $(minikube docker-env)
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} student-management:latest
+                    '''
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push to DockerHub') {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh '''
-                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                             docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
                         '''
                     }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    // 1. Mettre à jour l'image dans le déploiement Kubernetes
+                    sh '''
+                        kubectl set image deployment/spring-deployment \
+                        spring-app=student-management:latest \
+                        -n ${K8S_NAMESPACE}
+                    '''
+                    
+                    // 2. Vérifier le rollout
+                    sh '''
+                        kubectl rollout status deployment/spring-deployment \
+                        -n ${K8S_NAMESPACE} --timeout=300s
+                    '''
+                    
+                    // 3. Vérifier les pods
+                    sh '''
+                        kubectl get pods -n ${K8S_NAMESPACE}
+                        kubectl get svc -n ${K8S_NAMESPACE}
+                    '''
+                }
+            }
+        }
+
+        stage('Test Deployment') {
+            steps {
+                script {
+                    // Obtenir l'URL et tester
+                    sh '''
+                        APP_URL=$(minikube service spring-service -n ${K8S_NAMESPACE} --url)
+                        echo "Application URL: $APP_URL"
+                        curl -s $APP_URL/student/actuator/health | grep -q "UP" && echo "✅ Application is UP!" || echo "❌ Application is DOWN!"
+                    '''
                 }
             }
         }
@@ -68,6 +105,18 @@ pipeline {
     post {
         always {
             echo "Pipeline terminée ✅"
+            script {
+                // Nettoyage
+                sh 'docker logout'
+            }
+        }
+        success {
+            echo "✅ Déploiement réussi sur Kubernetes!"
+            slackSend(color: 'good', message: "Build ${BUILD_NUMBER} déployé avec succès!")
+        }
+        failure {
+            echo "❌ Échec du déploiement!"
+            slackSend(color: 'danger', message: "Build ${BUILD_NUMBER} a échoué!")
         }
     }
 }
