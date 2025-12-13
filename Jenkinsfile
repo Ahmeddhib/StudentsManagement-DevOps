@@ -25,18 +25,6 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('sonarqube') {
-                    sh 'mvn sonar:sonar \
-                        -Dsonar.projectKey=student-management \
-                        -Dsonar.host.url=http://192.168.49.2:30010 \
-                        -Dsonar.login=admin \
-                        -Dsonar.password=sonar'
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 script {
@@ -117,6 +105,11 @@ pipeline {
         failure {
             echo "❌ Échec du déploiement!"
             slackSend(color: 'danger', message: "Build ${BUILD_NUMBER} a échoué!")
+            emailext (
+                subject: "Échec du pipeline: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Le build ${env.BUILD_URL} a échoué.",
+                to: 'votre-email@example.com'
+            )
         }
     }
 }
