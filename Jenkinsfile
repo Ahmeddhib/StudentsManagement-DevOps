@@ -5,8 +5,10 @@ pipeline {
         DOCKER_IMAGE = "ahmedwolf/spring-test3"
         DOCKER_TAG = "build-${env.BUILD_NUMBER}"
         DOCKER_LATEST = "latest"
-        // REMPLACEZ 192.168.49.1 PAR VOTRE VÉRITABLE IP UBUNTU
+        // Configuration SonarQube avec token
         SONAR_HOST = "http://192.168.49.1:9000"
+        // REMPLACEZ sqp_... PAR VOTRE TOKEN RÉEL
+        SONAR_TOKEN = "squ_89c7bc3d712cf67b71452a9253ceb6d571849d3e"
     }
 
     stages {
@@ -20,20 +22,19 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis - Direct Method') {
+        stage('SonarQube Analysis - With Token') {
             steps {
                 script {
                     echo "🔍 Analyse SonarQube en cours..."
 
-                    // Commande Maven directe - PAS besoin de configuration Jenkins
+                    // Version avec token (plus sécurisée)
                     sh """
-                        mvn sonar:sonar \\
-                            -Dsonar.projectKey=StudentsManagement \\
-                            -Dsonar.projectName="Students Management System" \\
-                            -Dsonar.host.url=${SONAR_HOST} \\
-                            -Dsonar.login=admin \\
-                            -Dsonar.password=sonar \\
-                            -Dsonar.sources=src/main/java \\
+                        mvn sonar:sonar \
+                            -Dsonar.projectKey=StudentsManagement \
+                            -Dsonar.projectName="Students Management System" \
+                            -Dsonar.host.url=${SONAR_HOST} \
+                            -Dsonar.login=${SONAR_TOKEN} \
+                            -Dsonar.sources=src/main/java \
                             -Dsonar.java.binaries=target/classes
                     """
 
@@ -42,7 +43,7 @@ pipeline {
             }
         }
 
-        // COMMENTEZ cette étape pour l'instant - elle nécessite la configuration Jenkins
+        // DÉCOMMENTEZ cette étase plus tard
         /*
         stage('Wait for Quality Gate') {
             steps {
@@ -252,3 +253,4 @@ pipeline {
         }
     }
 }
+
