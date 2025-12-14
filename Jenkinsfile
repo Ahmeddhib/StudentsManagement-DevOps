@@ -237,7 +237,7 @@ pipeline {
                 
                 Déploiement Kubernetes vérifié.
                 """,
-                to: 'ahmed@example.com', // Remplacez par votre email
+                to: 'ahmeddhib20@gmail.com', // Remplacez par votre email
                 attachLog: true
             )
         }
@@ -257,7 +257,7 @@ pipeline {
                 
                 Consultez les logs pour plus de détails.
                 """,
-                to: 'ahmed@example.com',
+                to: 'ahmeddhib20@gmail.com',
                 attachLog: true
             )
         }
