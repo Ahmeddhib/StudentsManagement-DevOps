@@ -390,7 +390,7 @@ pipeline {
                 Vérification Kubernetes:
                 kubectl get pods -l app=${K8S_DEPLOYMENT}
                 """,
-                to: 'ahmed@example.com',  // Remplacez par votre email
+                to: 'ahmeddhib20@gmail.com',  // Remplacez par votre email
                 from: 'jenkins@localhost'
             )
         }
@@ -400,7 +400,7 @@ pipeline {
             emailext (
                 subject: "ÉCHEC Pipeline ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: "Le build ${env.BUILD_URL} a échoué. Consultez les logs pour plus de détails.",
-                to: 'ahmed@example.com',  // Remplacez par votre email
+                to: 'ahmeddhib20@gmail.com',  // Remplacez par votre email
                 from: 'jenkins@localhost'
             )
         }
