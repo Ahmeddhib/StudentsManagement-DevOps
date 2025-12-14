@@ -26,21 +26,9 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    // Configuration pour SonarQube
-                    withSonarQubeEnv('sonarqube') { // 'sonarqube' est l'ID de votre configuration SonarQube dans Jenkins
-                        sh '''
-                            echo "🔍 Exécution de l'analyse SonarQube..."
-                            # Exécuter l'analyse SonarQube
-                            mvn sonar:sonar \
-                                -Dsonar.projectKey=StudentsManagement \
-                                -Dsonar.projectName="Students Management System" \
-                                -Dsonar.host.url=${SONAR_HOST_URL} \
-                                -Dsonar.login=admin \
-                                -Dsonar.password=sonar \
-                                -Dsonar.sources=src/main/java \
-                                -Dsonar.tests=src/test/java \
-                                -Dsonar.java.binaries=target/classes
-                        '''
+                    // Option 1 : Utiliser avecSonarQubeEnv si configuré
+                    withSonarQubeEnv('sonarqube') {
+                        sh 'mvn sonar:sonar'
                     }
                 }
             }
