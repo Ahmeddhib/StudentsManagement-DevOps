@@ -7,7 +7,7 @@ pipeline {
         DOCKER_TAG = "build-${env.BUILD_NUMBER}"
         DOCKER_LATEST = "latest"
         // Configuration SonarQube
-        SONAR_HOST_URL = "http://<IP-VOTRE-MACHINE>:9000"
+        SONAR_HOST_URL = "http://192.168.49.1:9000"
         // Remplacez <IP-VOTRE-MACHINE> par l'adresse IP de votre machine Ubuntu
         // Exemple: SONAR_HOST_URL = "http://192.168.1.100:9000"
     }
