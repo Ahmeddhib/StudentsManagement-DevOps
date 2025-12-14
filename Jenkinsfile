@@ -6,6 +6,10 @@ pipeline {
         // Utiliser un tag unique par build
         DOCKER_TAG = "build-${env.BUILD_NUMBER}"
         DOCKER_LATEST = "latest"
+        // Configuration SonarQube
+        SONAR_HOST_URL = "http://<IP-VOTRE-MACHINE>:9000"
+        // Remplacez <IP-VOTRE-MACHINE> par l'adresse IP de votre machine Ubuntu
+        // Exemple: SONAR_HOST_URL = "http://192.168.1.100:9000"
     }
 
     stages {
@@ -16,6 +20,41 @@ pipeline {
                           userRemoteConfigs: [[url: 'https://github.com/Ahmeddhib/StudentsManagement-DevOps.git']],
                           extensions: [[$class: 'CloneOption', shallow: true, depth: 1, noTags: false, timeout: 10]]
                 ])
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    // Configuration pour SonarQube
+                    withSonarQubeEnv('sonarqube') { // 'sonarqube' est l'ID de votre configuration SonarQube dans Jenkins
+                        sh '''
+                            echo "🔍 Exécution de l'analyse SonarQube..."
+                            # Exécuter l'analyse SonarQube
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=StudentsManagement \
+                                -Dsonar.projectName="Students Management System" \
+                                -Dsonar.host.url=${SONAR_HOST_URL} \
+                                -Dsonar.login=admin \
+                                -Dsonar.password=sonar \
+                                -Dsonar.sources=src/main/java \
+                                -Dsonar.tests=src/test/java \
+                                -Dsonar.java.binaries=target/classes
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Wait for Quality Gate') {
+            steps {
+                script {
+                    // Attendre que l'analyse SonarQube soit complétée et vérifier la Quality Gate
+                    timeout(time: 10, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
+                    }
+                    echo "✅ Quality Gate passée avec succès !"
+                }
             }
         }
 
@@ -38,13 +77,13 @@ pipeline {
                         xargs cat 2>/dev/null | \
                         sha256sum | \
                         awk '{print $1}' > current_code_hash.txt
-                        
+
                         echo "Hash calculé : $(cat current_code_hash.txt)"
                     '''
-                    
+
                     // Lire le hash actuel
                     def currentHash = readFile('current_code_hash.txt').trim()
-                    
+
                     // Essayer de lire le hash précédent (stocké dans workspace)
                     def previousHash = ""
                     try {
@@ -54,7 +93,7 @@ pipeline {
                         echo "Aucun hash précédent trouvé (premier build?)"
                         previousHash = ""
                     }
-                    
+
                     // Comparer les hashs
                     if (currentHash != previousHash) {
                         echo "🔄 Changements détectés dans le code !"
@@ -63,10 +102,10 @@ pipeline {
                         echo "✅ Aucun changement dans le code"
                         env.BUILD_NEEDED = "false"
                     }
-                    
+
                     // Sauvegarder le hash actuel pour le prochain build
                     writeFile file: 'previous_code_hash.txt', text: currentHash
-                    
+
                     echo "Build nécessaire ? ${env.BUILD_NEEDED}"
                 }
             }
@@ -100,17 +139,17 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub', 
-                        usernameVariable: 'DOCKER_USER', 
+                        credentialsId: 'dockerhub',
+                        usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         sh '''
                             echo "Authentification sur Docker Hub..."
                             echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                            
+
                             echo "Images disponibles localement :"
                             docker images | grep ${DOCKER_IMAGE} || echo "Aucune image trouvée"
-                            
+
                             # Vérifier si l'image avec le tag spécifique existe
                             if docker inspect ${DOCKER_IMAGE}:${DOCKER_TAG} > /dev/null 2>&1; then
                                 echo "Push de l'image avec tag ${DOCKER_TAG}..."
@@ -119,7 +158,7 @@ pipeline {
                                 echo "⚠️ Image ${DOCKER_IMAGE}:${DOCKER_TAG} non trouvée localement"
                                 echo "→ Skip du push pour ce tag"
                             fi
-                            
+
                             # Push du tag latest seulement si le build a été fait
                             if [ "${BUILD_NEEDED}" = "true" ]; then
                                 echo "Push de l'image avec tag latest..."
@@ -139,7 +178,7 @@ pipeline {
                     // Vérifier d'abord si l'image existe localement ou sur DockerHub
                     sh '''
                         echo "🔄 Déploiement sur Kubernetes..."
-                        
+
                         # Vérifier si on a une image à déployer
                         if docker inspect ${DOCKER_IMAGE}:${DOCKER_TAG} > /dev/null 2>&1; then
                             echo "Utilisation de l'image locale: ${DOCKER_IMAGE}:${DOCKER_TAG}"
@@ -151,9 +190,9 @@ pipeline {
                             echo "⚠️ Aucune image locale trouvée, utilisation de latest depuis DockerHub"
                             IMAGE_TO_DEPLOY="${DOCKER_IMAGE}:${DOCKER_LATEST}"
                         fi
-                        
+
                         echo "Image à déployer: \${IMAGE_TO_DEPLOY}"
-                        
+
                         # Créer ou mettre à jour le déploiement
                         if kubectl get deployment spring-test3 > /dev/null 2>&1; then
                             echo "Mise à jour du déploiement existant..."
@@ -167,12 +206,12 @@ pipeline {
                                 --image=\${IMAGE_TO_DEPLOY} \
                                 --replicas=1
                         fi
-                        
+
                         # Vérifier le statut du rollout
                         kubectl rollout status deployment/spring-test3 --timeout=300s || true
-                        
+
                         echo "✅ Déploiement Kubernetes terminé"
-                        
+
                         # Afficher les informations
                         echo "--- Informations du déploiement ---"
                         kubectl get deployment spring-test3 -o wide || echo "Déploiement non trouvé"
@@ -189,26 +228,27 @@ pipeline {
                 # Déconnexion Docker
                 docker logout || true
             '''
-            
+
             echo "📊 Résumé du build:"
             echo "Build #${env.BUILD_NUMBER}"
             echo "Image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
             echo "Build nécessaire: ${env.BUILD_NEEDED}"
-            
+
             // Sauvegarder le hash pour les builds suivants
             archiveArtifacts artifacts: 'previous_code_hash.txt', fingerprint: true
         }
-        
+
         success {
             echo "✅ Pipeline terminée avec succès !"
             echo "📦 Image Docker: ${DOCKER_IMAGE}:${DOCKER_TAG}"
             echo "🚀 Déployé sur Kubernetes"
+            echo "🔍 Analyse SonarQube complétée"
         }
-        
+
         failure {
             echo "❌ Pipeline échouée !"
         }
-        
+
         changed {
             echo "🔄 Statut du build changé depuis la dernière exécution"
         }
