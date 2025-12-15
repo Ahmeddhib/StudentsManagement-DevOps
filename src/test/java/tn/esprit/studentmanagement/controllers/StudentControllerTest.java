@@ -95,16 +95,17 @@ class StudentControllerTest {
                 .andExpect(jsonPath("$.email", is("john.doe@esprit.tn")));
     }
 
-    @Test
-    void testGetStudentByIdNotFound() throws Exception {
-        // Given
-        Long studentId = 999L;
-        when(studentService.getStudentById(studentId)).thenReturn(null);
+   @Test
+void testGetStudentByIdNotFound() throws Exception {
+    // Given
+    Long studentId = 999L;
+    when(studentService.getStudentById(studentId)).thenReturn(null);
 
-        // When & Then - Maintenant cela devrait retourner 404 ou une exception
-        mockMvc.perform(get("/api/students/{id}", studentId))
-                .andExpect(status().isNotFound()); // Modifier selon votre gestion d'erreur
-    }
+    // When & Then - Maintenant le contrôleur lance une exception
+    mockMvc.perform(get("/students/getStudent/{id}", studentId))
+            .andExpect(status().isNotFound()) // Attendre 404 au lieu de 200
+            .andExpect(jsonPath("$").doesNotExist()); // Pas de contenu JSON
+}
 
     @Test
     void testCreateStudent() throws Exception {
