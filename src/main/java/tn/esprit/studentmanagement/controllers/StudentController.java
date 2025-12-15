@@ -1,7 +1,6 @@
 package tn.esprit.studentmanagement.controllers;
 
 import lombok.AllArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.studentmanagement.entities.Student;
 import tn.esprit.studentmanagement.services.IStudentService;
@@ -9,26 +8,50 @@ import tn.esprit.studentmanagement.services.IStudentService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/students")
+@RequestMapping("/api/students") // Ajouter /api pour meilleure convention
 @CrossOrigin(origins = "http://localhost:4200")
 @AllArgsConstructor
 public class StudentController {
-IStudentService studentService;
+    
+    private final IStudentService studentService; // Utiliser l'interface, pas l'implémentation
 
-    @GetMapping("/getAllStudents")
-    public List<Student> getAllStudents() { return studentService.getAllStudents(); }
+    @GetMapping
+    public List<Student> getAllStudents() { 
+        return studentService.getAllStudents(); 
+    }
 
-    @GetMapping("/getStudent/{id}")
-    public Student getStudent(@PathVariable Long id) { return studentService.getStudentById(id); }
+    @GetMapping("/{id}")
+    public Student getStudent(@PathVariable Long id) { 
+        Student student = studentService.getStudentById(id);
+        if (student == null) {
+            throw new RuntimeException("Student not found with id: " + id); // Gérer le cas null
+        }
+        return student; 
+    }
 
-    @PostMapping("/createStudent")
-    public Student createStudent(@RequestBody Student student) { return studentService.saveStudent(student); }
+    @PostMapping
+    public Student createStudent(@RequestBody Student student) { 
+        return studentService.saveStudent(student); 
+    }
 
-    @PutMapping("/updateStudent")
-    public Student updateStudent(@RequestBody Student student) {
+    @PutMapping("/{id}")
+    public Student updateStudent(@PathVariable Long id, @RequestBody Student student) {
+        // Vérifier si l'étudiant existe
+        Student existingStudent = studentService.getStudentById(id);
+        if (existingStudent == null) {
+            throw new RuntimeException("Student not found with id: " + id);
+        }
+        student.setIdStudent(id); // S'assurer que l'ID est correct
         return studentService.saveStudent(student);
     }
 
-    @DeleteMapping("/deleteStudent/{id}")
-    public void deleteStudent(@PathVariable Long id) { studentService.deleteStudent(id); }
+    @DeleteMapping("/{id}")
+    public void deleteStudent(@PathVariable Long id) { 
+        // Vérifier si l'étudiant existe
+        Student existingStudent = studentService.getStudentById(id);
+        if (existingStudent == null) {
+            throw new RuntimeException("Student not found with id: " + id);
+        }
+        studentService.deleteStudent(id); 
+    }
 }
