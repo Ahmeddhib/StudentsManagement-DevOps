@@ -176,12 +176,20 @@ void testGetStudentByIdNotFound() throws Exception {
 
         verify(studentService, times(1)).deleteStudent(studentId);
     }
+@Test
+void testCorsHeaders() throws Exception {
+    // Créer un étudiant de test pour que la requête réussisse
+    Student student = Student.builder()
+            .idStudent(1L)
+            .firstName("John")
+            .lastName("Doe")
+            .build();
+    
+    when(studentService.getAllStudents()).thenReturn(List.of(student));
 
-    @Test
-    void testCorsHeaders() throws Exception {
-        mockMvc.perform(get("/api/students")
-                        .header("Origin", "http://localhost:4200"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
-    }
+    mockMvc.perform(get("/students/getAllStudents")
+                    .header("Origin", "http://localhost:4200"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
+}
 }
