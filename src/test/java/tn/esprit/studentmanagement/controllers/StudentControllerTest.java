@@ -2,15 +2,13 @@ package tn.esprit.studentmanagement.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.studentmanagement.entities.Student;
-import tn.esprit.studentmanagement.services.StudentService;
+import tn.esprit.studentmanagement.services.IStudentService; // Importer l'interface
 
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -22,16 +20,15 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// Solution 1: Avec @Mock (recommandé pour Spring Boot 3.4.0+)
-@ExtendWith(MockitoExtension.class)
+// Utiliser @MockBean au lieu de @Mock avec @ExtendWith
 @WebMvcTest(StudentController.class)
 class StudentControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Mock  // Utilise @Mock au lieu de @MockBean
-    private StudentService studentService;  // Mock de l'implémentation, pas de l'interface
+    @MockBean  // Utiliser @MockBean pour Spring
+    private IStudentService studentService;  // Mock de l'interface
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -65,7 +62,7 @@ class StudentControllerTest {
         when(studentService.getAllStudents()).thenReturn(students);
 
         // Exécution et vérification
-        mockMvc.perform(get("/students/getAllStudents")
+        mockMvc.perform(get("/api/students") // Mettre à jour l'URL
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
@@ -91,7 +88,7 @@ class StudentControllerTest {
         when(studentService.getStudentById(studentId)).thenReturn(student);
 
         // When & Then
-        mockMvc.perform(get("/students/getStudent/{id}", studentId))
+        mockMvc.perform(get("/api/students/{id}", studentId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idStudent", is(studentId.intValue())))
                 .andExpect(jsonPath("$.firstName", is("John")))
@@ -104,10 +101,9 @@ class StudentControllerTest {
         Long studentId = 999L;
         when(studentService.getStudentById(studentId)).thenReturn(null);
 
-        // When & Then
-        mockMvc.perform(get("/students/getStudent/{id}", studentId))
-                .andExpect(status().isOk())
-                .andExpect(content().string(""));
+        // When & Then - Maintenant cela devrait retourner 404 ou une exception
+        mockMvc.perform(get("/api/students/{id}", studentId))
+                .andExpect(status().isNotFound()); // Modifier selon votre gestion d'erreur
     }
 
     @Test
@@ -129,7 +125,7 @@ class StudentControllerTest {
         when(studentService.saveStudent(any(Student.class))).thenReturn(savedStudent);
 
         // When & Then
-        mockMvc.perform(post("/students/createStudent")
+        mockMvc.perform(post("/api/students")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(newStudent)))
                 .andExpect(status().isOk())
@@ -140,17 +136,20 @@ class StudentControllerTest {
     @Test
     void testUpdateStudent() throws Exception {
         // Given
+        Long studentId = 1L;
         Student updatedStudent = Student.builder()
-                .idStudent(1L)
+                .idStudent(studentId)
                 .firstName("Updated")
                 .lastName("Student")
                 .email("updated.student@esprit.tn")
                 .build();
 
+        // Simuler que l'étudiant existe
+        when(studentService.getStudentById(studentId)).thenReturn(updatedStudent);
         when(studentService.saveStudent(any(Student.class))).thenReturn(updatedStudent);
 
         // When & Then
-        mockMvc.perform(put("/students/updateStudent")
+        mockMvc.perform(put("/api/students/{id}", studentId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updatedStudent)))
                 .andExpect(status().isOk())
@@ -161,10 +160,17 @@ class StudentControllerTest {
     void testDeleteStudent() throws Exception {
         // Given
         Long studentId = 1L;
+        Student existingStudent = Student.builder()
+                .idStudent(studentId)
+                .firstName("John")
+                .lastName("Doe")
+                .build();
+        
+        when(studentService.getStudentById(studentId)).thenReturn(existingStudent);
         doNothing().when(studentService).deleteStudent(studentId);
 
         // When & Then
-        mockMvc.perform(delete("/students/deleteStudent/{id}", studentId))
+        mockMvc.perform(delete("/api/students/{id}", studentId))
                 .andExpect(status().isOk());
 
         verify(studentService, times(1)).deleteStudent(studentId);
@@ -172,9 +178,9 @@ class StudentControllerTest {
 
     @Test
     void testCorsHeaders() throws Exception {
-        mockMvc.perform(get("/students/getAllStudents")
+        mockMvc.perform(get("/api/students")
                         .header("Origin", "http://localhost:4200"))
                 .andExpect(status().isOk())
-                .andExpect(header().exists("Access-Control-Allow-Origin"));
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
     }
 }
