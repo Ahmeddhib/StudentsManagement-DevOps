@@ -11,6 +11,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString
+@Builder // Ajoute cette annotation
 public class Department {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

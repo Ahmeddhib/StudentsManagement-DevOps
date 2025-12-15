@@ -2,7 +2,6 @@ package tn.esprit.studentmanagement.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString
+@Builder // Ajoute cette annotation
 public class Student {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

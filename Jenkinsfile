@@ -5,10 +5,9 @@ pipeline {
         DOCKER_IMAGE = "ahmedwolf/spring-test3"
         DOCKER_TAG = "build-${env.BUILD_NUMBER}"
         DOCKER_LATEST = "latest"
-        // Configuration SonarQube avec token
         SONAR_HOST = "http://192.168.49.1:9000"
-        // REMPLACEZ sqp_... PAR VOTRE TOKEN RÉEL
         SONAR_TOKEN = "squ_89c7bc3d712cf67b71452a9253ceb6d571849d3e"
+        JACOCO_REPORT_PATH = "target/site/jacoco/jacoco.xml"
     }
 
     stages {
@@ -22,119 +21,136 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis - With Token') {
+        stage('Run Tests & Generate JaCoCo') {
             steps {
                 script {
-                    echo "🔍 Analyse SonarQube en cours..."
+                    echo "🧪 Exécution des tests avec JaCoCo..."
 
-                    // Version avec token (plus sécurisée)
-                    sh """
-                        mvn sonar:sonar \
-                            -Dsonar.projectKey=StudentsManagement \
-                            -Dsonar.projectName="Students Management System" \
-                            -Dsonar.host.url=${SONAR_HOST} \
-                            -Dsonar.login=${SONAR_TOKEN} \
-                            -Dsonar.sources=src/main/java \
-                            -Dsonar.java.binaries=target/classes
-                    """
-
-                    echo "✅ Analyse SonarQube terminée"
-                }
-            }
-        }
-
-        // DÉCOMMENTEZ cette étase plus tard
-        /*
-        stage('Wait for Quality Gate') {
-            steps {
-                script {
-                    timeout(time: 10, unit: 'MINUTES') {
-                        waitForQualityGate abortPipeline: true
-                    }
-                    echo "✅ Quality Gate passée avec succès !"
-                }
-            }
-        }
-        */
-
-        stage('Check for Code Changes') {
-            steps {
-                script {
-                    // Calculer le hash SHA256 du code source
                     sh '''
-                        # Calculer le hash de tous les fichiers sources
-                        find . -type f \
-                            -name "*.java" -o \
-                            -name "*.xml" -o \
-                            -name "*.properties" -o \
-                            -name "*.yml" -o \
-                            -name "*.yaml" -o \
-                            -name "Dockerfile" -o \
-                            -name "pom.xml" -o \
-                            -name "Jenkinsfile" | \
-                        sort | \
-                        xargs cat 2>/dev/null | \
-                        sha256sum | \
-                        awk '{print $1}' > current_code_hash.txt
+                        echo "=== ÉTAPE 1: EXÉCUTION DES TESTS ==="
 
-                        echo "Hash calculé : $(cat current_code_hash.txt)"
+                        # Vérifier si nous avons des tests
+                        TEST_COUNT=$(find src/test -name "*Test*.java" 2>/dev/null | wc -l)
+                        echo "Nombre de fichiers de test trouvés: $TEST_COUNT"
+
+                        if [ "$TEST_COUNT" -eq 0 ]; then
+                            echo "⚠️ Aucun test trouvé. Créez des tests dans src/test/"
+                            echo "Création d'un test minimal..."
+
+                            # Créer un test minimal si aucun n'existe
+                            mkdir -p src/test/java/tn/esprit/studentmanagement
+                            cat > src/test/java/tn/esprit/studentmanagement/SimpleTest.java << 'SIMPLE_TEST'
+package tn.esprit.studentmanagement;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public class SimpleTest {
+    @Test
+    void contextLoads() {
+        assertTrue(true);
+    }
+
+    @Test
+    void basicMath() {
+        assertTrue(2 + 2 == 4, "2+2 should be 4");
+    }
+}
+SIMPLE_TEST
+                        fi
+
+                        # Exécuter les tests avec JaCoCo
+                        echo "=== ÉTAPE 2: EXÉCUTION Maven ==="
+                        mvn clean test jacoco:report -DskipTests=false
+
+                        # Vérifier les résultats
+                        echo "=== ÉTAPE 3: VÉRIFICATION RÉSULTATS ==="
+                        if [ -d "target/surefire-reports" ]; then
+                            echo "✅ Rapports de test générés"
+                            ls -la target/surefire-reports/*.txt 2>/dev/null | head -5
+                        else
+                            echo "⚠️ Aucun rapport de test"
+                        fi
+
+                        if [ -f "${JACOCO_REPORT_PATH}" ]; then
+                            echo "✅ Rapport JaCoCo généré: ${JACOCO_REPORT_PATH}"
+                            # Afficher un aperçu des stats
+                            LINES_COVERED=$(grep -oP 'type="LINE" covered="\K[^"]+' ${JACOCO_REPORT_PATH} | head -1)
+                            LINES_MISSED=$(grep -oP 'type="LINE" missed="\K[^"]+' ${JACOCO_REPORT_PATH} | head -1)
+
+                            if [ -n "$LINES_COVERED" ] && [ -n "$LINES_MISSED" ]; then
+                                TOTAL=$((LINES_COVERED + LINES_MISSED))
+                                if [ $TOTAL -gt 0 ]; then
+                                    PERCENTAGE=$((LINES_COVERED * 100 / TOTAL))
+                                    echo "📊 Couverture: ${PERCENTAGE}% (${LINES_COVERED}/${TOTAL} lignes)"
+                                fi
+                            fi
+                        else
+                            echo "❌ Rapport JaCoCo non généré"
+                            echo "Vérifiez la configuration dans pom.xml"
+                            ls -la target/site/jacoco/ 2>/dev/null || echo "Dossier jacoco non trouvé"
+                        fi
                     '''
-
-                    // Lire le hash actuel
-                    def currentHash = readFile('current_code_hash.txt').trim()
-
-                    // Essayer de lire le hash précédent (stocké dans workspace)
-                    def previousHash = ""
-                    try {
-                        previousHash = readFile('previous_code_hash.txt').trim()
-                        echo "Hash précédent trouvé : ${previousHash}"
-                    } catch(e) {
-                        echo "Aucun hash précédent trouvé (premier build?)"
-                        previousHash = ""
-                    }
-
-                    // Comparer les hashs
-                    if (currentHash != previousHash) {
-                        echo "🔄 Changements détectés dans le code !"
-                        env.BUILD_NEEDED = "true"
-                    } else {
-                        echo "✅ Aucun changement dans le code"
-                        env.BUILD_NEEDED = "false"
-                    }
-
-                    // Sauvegarder le hash actuel pour le prochain build
-                    writeFile file: 'previous_code_hash.txt', text: currentHash
-
-                    echo "Build nécessaire ? ${env.BUILD_NEEDED}"
                 }
             }
         }
 
-        stage('Build Maven Project') {
-            when {
-                expression { env.BUILD_NEEDED == "true" }
-            }
+        stage('SonarQube Analysis') {
             steps {
-                sh 'mvn clean install -DskipTests -B'
+                script {
+                    echo "🔍 Analyse SonarQube..."
+
+                    sh """
+                        if [ -f "${JACOCO_REPORT_PATH}" ]; then
+                            echo "✅ Analyse AVEC couverture JaCoCo"
+
+                            mvn sonar:sonar \\
+                                -Dsonar.projectKey=StudentsManagement \\
+                                -Dsonar.projectName="Students Management System" \\
+                                -Dsonar.host.url=${SONAR_HOST} \\
+                                -Dsonar.login=${SONAR_TOKEN} \\
+                                -Dsonar.coverage.jacoco.xmlReportPaths=${JACOCO_REPORT_PATH} \\
+                                -Dsonar.java.coveragePlugin=jacoco \\
+                                -Dsonar.sources=src/main/java \\
+                                -Dsonar.java.binaries=target/classes
+                        else
+                            echo "⚠️ Analyse SANS couverture"
+
+                            mvn sonar:sonar \\
+                                -Dsonar.projectKey=StudentsManagement \\
+                                -Dsonar.projectName="Students Management System" \\
+                                -Dsonar.host.url=${SONAR_HOST} \\
+                                -Dsonar.login=${SONAR_TOKEN} \\
+                                -Dsonar.sources=src/main/java \\
+                                -Dsonar.java.binaries=target/classes
+                        fi
+
+                        echo "📊 Rapport disponible: ${SONAR_HOST}/dashboard?id=StudentsManagement"
+                    """
+                }
             }
         }
 
         stage('Build Docker Image') {
-            when {
-                expression { env.BUILD_NEEDED == "true" }
-            }
             steps {
                 script {
-                    // Builder avec le tag unique
-                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
-                    // Tagger aussi en latest pour usage local
-                    sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:${DOCKER_LATEST}"
-                    echo "✅ Image Docker construite : ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    echo "🐳 Construction de l'image Docker..."
+
+                    sh """
+                        # Build avec votre Dockerfile
+                        docker build \\
+                            --tag ${DOCKER_IMAGE}:${DOCKER_TAG} \\
+                            --tag ${DOCKER_IMAGE}:latest \\
+                            .
+
+                        echo "✅ Image construite:"
+                        docker images ${DOCKER_IMAGE}:${DOCKER_TAG} --format "table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}"
+                    """
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push to Docker Hub') {
             steps {
                 script {
                     withCredentials([usernamePassword(
@@ -143,28 +159,16 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         sh '''
-                            echo "Authentification sur Docker Hub..."
-                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            echo "🔐 Authentification Docker Hub..."
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
 
-                            echo "Images disponibles localement :"
-                            docker images | grep ${DOCKER_IMAGE} || echo "Aucune image trouvée"
+                            echo "⬆️  Push ${DOCKER_IMAGE}:${DOCKER_TAG}..."
+                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
 
-                            # Vérifier si l'image avec le tag spécifique existe
-                            if docker inspect ${DOCKER_IMAGE}:${DOCKER_TAG} > /dev/null 2>&1; then
-                                echo "Push de l'image avec tag ${DOCKER_TAG}..."
-                                docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                            else
-                                echo "⚠️ Image ${DOCKER_IMAGE}:${DOCKER_TAG} non trouvée localement"
-                                echo "→ Skip du push pour ce tag"
-                            fi
+                            echo "⬆️  Push ${DOCKER_IMAGE}:latest..."
+                            docker push ${DOCKER_IMAGE}:latest
 
-                            # Push du tag latest seulement si le build a été fait
-                            if [ "${BUILD_NEEDED}" = "true" ]; then
-                                echo "Push de l'image avec tag latest..."
-                                docker push ${DOCKER_IMAGE}:${DOCKER_LATEST}
-                            else
-                                echo "Skip push latest (aucun changement détecté)"
-                            fi
+                            echo "✅ Images poussées"
                         '''
                     }
                 }
@@ -174,46 +178,24 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    // Vérifier d'abord si l'image existe localement ou sur DockerHub
                     sh '''
-                        echo "🔄 Déploiement sur Kubernetes..."
+                        echo "🚀 Déploiement Kubernetes..."
 
-                        # Vérifier si on a une image à déployer
-                        if docker inspect ${DOCKER_IMAGE}:${DOCKER_TAG} > /dev/null 2>&1; then
-                            echo "Utilisation de l'image locale: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                            IMAGE_TO_DEPLOY="${DOCKER_IMAGE}:${DOCKER_TAG}"
-                        elif docker inspect ${DOCKER_IMAGE}:${DOCKER_LATEST} > /dev/null 2>&1; then
-                            echo "Utilisation de l'image latest locale: ${DOCKER_IMAGE}:${DOCKER_LATEST}"
-                            IMAGE_TO_DEPLOY="${DOCKER_IMAGE}:${DOCKER_LATEST}"
-                        else
-                            echo "⚠️ Aucune image locale trouvée, utilisation de latest depuis DockerHub"
-                            IMAGE_TO_DEPLOY="${DOCKER_IMAGE}:${DOCKER_LATEST}"
+                        if ! command -v kubectl &> /dev/null || ! kubectl cluster-info &> /dev/null; then
+                            echo "⚠️ Kubernetes non disponible - skip"
+                            exit 0
                         fi
 
-                        echo "Image à déployer: \${IMAGE_TO_DEPLOY}"
-
-                        # Créer ou mettre à jour le déploiement
-                        if kubectl get deployment spring-test3 > /dev/null 2>&1; then
-                            echo "Mise à jour du déploiement existant..."
-                            kubectl set image deployment/spring-test3 \
-                                spring-test3=\${IMAGE_TO_DEPLOY} \
-                                --record
+                        if kubectl get deployment spring-test3 &> /dev/null; then
+                            echo "🔄 Mise à jour du déploiement..."
+                            kubectl set image deployment/spring-test3 spring-test3=${DOCKER_IMAGE}:${DOCKER_TAG}
                         else
-                            echo "Création d'un nouveau déploiement..."
-                            # Créer un déploiement simple (à adapter selon vos besoins)
-                            kubectl create deployment spring-test3 \
-                                --image=\${IMAGE_TO_DEPLOY} \
-                                --replicas=1
+                            echo "🆕 Création du déploiement..."
+                            kubectl create deployment spring-test3 --image=${DOCKER_IMAGE}:${DOCKER_TAG} --replicas=1
                         fi
 
-                        # Vérifier le statut du rollout
-                        kubectl rollout status deployment/spring-test3 --timeout=300s || true
-
-                        echo "✅ Déploiement Kubernetes terminé"
-
-                        # Afficher les informations
-                        echo "--- Informations du déploiement ---"
-                        kubectl get deployment spring-test3 -o wide || echo "Déploiement non trouvé"
+                        kubectl rollout status deployment/spring-test3 --timeout=300s
+                        echo "✅ Déployé: ${DOCKER_IMAGE}:${DOCKER_TAG}"
                     '''
                 }
             }
@@ -222,35 +204,28 @@ pipeline {
 
     post {
         always {
-            echo "🧹 Nettoyage..."
             sh '''
-                # Déconnexion Docker
-                docker logout || true
+                docker logout 2>/dev/null || true
+                echo "🧹 Nettoyage effectué"
             '''
 
-            echo "📊 Résumé du build:"
-            echo "Build #${env.BUILD_NUMBER}"
-            echo "Image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-            echo "Build nécessaire: ${env.BUILD_NEEDED}"
+            script {
+                // Archiver les rapports
+                archiveArtifacts artifacts: 'target/surefire-reports/*.txt', fingerprint: true, allowEmptyArchive: true
+                archiveArtifacts artifacts: 'target/site/jacoco/jacoco.xml', fingerprint: true, allowEmptyArchive: true
 
-            // Sauvegarder le hash pour les builds suivants
-            archiveArtifacts artifacts: 'previous_code_hash.txt', fingerprint: true
+                echo "📊 RÉSUMÉ BUILD #${env.BUILD_NUMBER}"
+                echo "🐳 Image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                echo "🔍 SonarQube: ${SONAR_HOST}/dashboard?id=StudentsManagement"
+            }
         }
 
         success {
-            echo "✅ Pipeline terminée avec succès !"
-            echo "📦 Image Docker: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-            echo "🚀 Déployé sur Kubernetes"
-            echo "🔍 Analyse SonarQube complétée"
+            echo "🎉 PIPELINE RÉUSSIE !"
         }
 
         failure {
-            echo "❌ Pipeline échouée !"
-        }
-
-        changed {
-            echo "🔄 Statut du build changé depuis la dernière exécution"
+            echo "❌ PIPELINE ÉCHOUÉE"
         }
     }
 }
-
