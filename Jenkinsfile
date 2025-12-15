@@ -34,12 +34,10 @@ pipeline {
                         echo "Nombre de fichiers de test trouvés: $TEST_COUNT"
 
                         if [ "$TEST_COUNT" -eq 0 ]; then
-                            echo "⚠️ Aucun test trouvé. Créez des tests dans src/test/"
-                            echo "Création d'un test minimal..."
+                            echo "⚠️ Aucun test trouvé. Création d'un test minimal..."
 
-                            # Créer un test minimal si aucun n'existe
                             mkdir -p src/test/java/tn/esprit/studentmanagement
-                            cat > src/test/java/tn/esprit/studentmanagement/SimpleTest.java << 'SIMPLE_TEST'
+                            cat > src/test/java/tn/esprit/studentmanagement/SimpleTest.java << SIMPLE_TEST
 package tn.esprit.studentmanagement;
 
 import org.junit.jupiter.api.Test;
@@ -63,27 +61,33 @@ SIMPLE_TEST
                         echo "=== ÉTAPE 2: EXÉCUTION Maven ==="
                         mvn clean test jacoco:report -DskipTests=false
 
-                        # Vérifier les résultats
+                        # Vérifier les résultats - VERSION CORRIGÉE
                         echo "=== ÉTAPE 3: VÉRIFICATION RÉSULTATS ==="
                         if [ -d "target/surefire-reports" ]; then
                             echo "✅ Rapports de test générés"
-                            ls -la target/surefire-reports/*.txt 2>/dev/null | head -5
+                            find target/surefire-reports -name "*.txt" 2>/dev/null | head -5
                         else
                             echo "⚠️ Aucun rapport de test"
                         fi
 
                         if [ -f "${JACOCO_REPORT_PATH}" ]; then
                             echo "✅ Rapport JaCoCo généré: ${JACOCO_REPORT_PATH}"
-                            # Afficher un aperçu des stats
-                            LINES_COVERED=$(grep -oP 'type="LINE" covered="\K[^"]+' ${JACOCO_REPORT_PATH} | head -1)
-                            LINES_MISSED=$(grep -oP 'type="LINE" missed="\K[^"]+' ${JACOCO_REPORT_PATH} | head -1)
 
-                            if [ -n "$LINES_COVERED" ] && [ -n "$LINES_MISSED" ]; then
-                                TOTAL=$((LINES_COVERED + LINES_MISSED))
-                                if [ $TOTAL -gt 0 ]; then
-                                    PERCENTAGE=$((LINES_COVERED * 100 / TOTAL))
-                                    echo "📊 Couverture: ${PERCENTAGE}% (${LINES_COVERED}/${TOTAL} lignes)"
+                            # VERSION SIMPLIFIÉE SANS REGEX COMPLEXE
+                            # Utiliser awk au lieu de grep avec regex Perl
+                            if command -v awk > /dev/null; then
+                                LINES_COVERED=$(awk -F'"' '/type="LINE" covered="/ {print $4}' ${JACOCO_REPORT_PATH} | head -1)
+                                LINES_MISSED=$(awk -F'"' '/type="LINE" missed="/ {print $4}' ${JACOCO_REPORT_PATH} | head -1)
+
+                                if [ -n "$LINES_COVERED" ] && [ -n "$LINES_MISSED" ]; then
+                                    TOTAL=$((LINES_COVERED + LINES_MISSED))
+                                    if [ $TOTAL -gt 0 ]; then
+                                        PERCENTAGE=$((LINES_COVERED * 100 / TOTAL))
+                                        echo "📊 Couverture: ${PERCENTAGE}% (${LINES_COVERED}/${TOTAL} lignes)"
+                                    fi
                                 fi
+                            else
+                                echo "ℹ️  awk non disponible pour analyser le rapport"
                             fi
                         else
                             echo "❌ Rapport JaCoCo non généré"
@@ -160,7 +164,7 @@ SIMPLE_TEST
                     )]) {
                         sh '''
                             echo "🔐 Authentification Docker Hub..."
-                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
 
                             echo "⬆️  Push ${DOCKER_IMAGE}:${DOCKER_TAG}..."
                             docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
