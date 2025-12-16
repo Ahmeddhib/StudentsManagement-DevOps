@@ -21,14 +21,14 @@ public class StudentController {
         return studentService.getAllStudents(); 
     }
 
-    @GetMapping("/{id}")
-    public Student getStudent(@PathVariable Long id) { 
-        Student student = studentService.getStudentById(id);
-        if (student == null) {
-            return ResponseEntity.notFound().build(); // Returns HTTP 404
-        }
-        return student; 
+   @GetMapping("/{id}")
+public ResponseEntity<Student> getStudent(@PathVariable Long id) {  // Changez Object -> Student
+    Student student = studentService.getStudentById(id);
+    if (student == null) {
+        return ResponseEntity.notFound().build(); // Returns HTTP 404
     }
+    return ResponseEntity.ok(student); // <-- CORRECTION ICI (ajoutez ResponseEntity.ok())
+}
 
     @PostMapping
     public Student createStudent(@RequestBody Student student) { 
