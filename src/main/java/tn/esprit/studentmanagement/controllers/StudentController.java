@@ -1,11 +1,10 @@
 package tn.esprit.studentmanagement.controllers;
 
 import lombok.AllArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.studentmanagement.entities.Student;
 import tn.esprit.studentmanagement.services.IStudentService;
-
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -22,14 +21,14 @@ public class StudentController {
         return studentService.getAllStudents(); 
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Student> getStudent(@PathVariable Long id) {  // Changez Object -> Student
-        Student student = studentService.getStudentById(id);
-        if (student == null) {
-            return ResponseEntity.notFound().build(); // Returns HTTP 404
-        }
-        return ResponseEntity.ok(student); // <-- CORRECTION ICI (ajoutez ResponseEntity.ok())
+   @GetMapping("/{id}")
+public ResponseEntity<Student> getStudent(@PathVariable Long id) {  // Changez Object -> Student
+    Student student = studentService.getStudentById(id);
+    if (student == null) {
+        return ResponseEntity.notFound().build(); // Returns HTTP 404
     }
+    return ResponseEntity.ok(student); // <-- CORRECTION ICI (ajoutez ResponseEntity.ok())
+}
 
     @PostMapping
     public Student createStudent(@RequestBody Student student) { 
