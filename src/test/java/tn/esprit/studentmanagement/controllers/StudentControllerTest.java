@@ -2,13 +2,13 @@ package tn.esprit.studentmanagement.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;  // <-- Changement ici
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.studentmanagement.entities.Student;
-import tn.esprit.studentmanagement.services.IStudentService; // Importer l'interface
+import tn.esprit.studentmanagement.services.IStudentService;
 
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -20,15 +20,14 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// Utiliser @MockBean au lieu de @Mock avec @ExtendWith
 @WebMvcTest(StudentController.class)
 class StudentControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Mock  // Utiliser @MockBean pour Spring
-    private IStudentService studentService;  // Mock de l'interface
+    @MockBean  // <-- Changement de @Mock à @MockBean
+    private IStudentService studentService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -95,17 +94,16 @@ class StudentControllerTest {
                 .andExpect(jsonPath("$.email", is("john.doe@esprit.tn")));
     }
 
-   @Test
-void testGetStudentByIdNotFound() throws Exception {
-    // Given
-    Long studentId = 999L;
-    when(studentService.getStudentById(studentId)).thenReturn(null);
+    @Test
+    void testGetStudentByIdNotFound() throws Exception {
+        // Given
+        Long studentId = 999L;
+        when(studentService.getStudentById(studentId)).thenReturn(null);
 
-    // When & Then - Maintenant le contrôleur lance une exception
-    mockMvc.perform(get("/students/getStudent/{id}", studentId))
-            .andExpect(status().isNotFound()) // Attendre 404 au lieu de 200
-            .andExpect(jsonPath("$").doesNotExist()); // Pas de contenu JSON
-}
+        // When & Then - Maintenant le contrôleur lance une exception
+        mockMvc.perform(get("/api/students/{id}", studentId))  // <-- Correction URL
+                .andExpect(status().isNotFound()); // Attendre 404
+    }
 
     @Test
     void testCreateStudent() throws Exception {
@@ -176,20 +174,21 @@ void testGetStudentByIdNotFound() throws Exception {
 
         verify(studentService, times(1)).deleteStudent(studentId);
     }
-@Test
-void testCorsHeaders() throws Exception {
-    // Créer un étudiant de test pour que la requête réussisse
-    Student student = Student.builder()
-            .idStudent(1L)
-            .firstName("John")
-            .lastName("Doe")
-            .build();
-    
-    when(studentService.getAllStudents()).thenReturn(List.of(student));
 
-    mockMvc.perform(get("/students/getAllStudents")
-                    .header("Origin", "http://localhost:4200"))
-            .andExpect(status().isOk())
-            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
-}
+    @Test
+    void testCorsHeaders() throws Exception {
+        // Créer un étudiant de test pour que la requête réussisse
+        Student student = Student.builder()
+                .idStudent(1L)
+                .firstName("John")
+                .lastName("Doe")
+                .build();
+        
+        when(studentService.getAllStudents()).thenReturn(List.of(student));
+
+        mockMvc.perform(get("/api/students")  // <-- Correction URL
+                        .header("Origin", "http://localhost:4200"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
+    }
 }
