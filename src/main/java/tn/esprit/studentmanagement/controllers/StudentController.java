@@ -34,24 +34,23 @@ public class StudentController {
         return studentService.saveStudent(student); 
     }
 
-    @PutMapping("/{id}")
-    public Student updateStudent(@PathVariable Long id, @RequestBody Student student) {
-        // Vérifier si l'étudiant existe
-        Student existingStudent = studentService.getStudentById(id);
-        if (existingStudent == null) {
-            return ResponseEntity.notFound().build(); // Returns HTTP 404
-        }
-        student.setIdStudent(id); // S'assurer que l'ID est correct
-        return studentService.saveStudent(student);
+   @PutMapping("/{id}")
+public ResponseEntity<Student> updateStudent(@PathVariable Long id, @RequestBody Student student) {
+    Student existingStudent = studentService.getStudentById(id);
+    if (existingStudent == null) {
+        return ResponseEntity.notFound().build(); // HTTP 404
     }
+    student.setIdStudent(id);
+    return ResponseEntity.ok(studentService.saveStudent(student)); // HTTP 200
+}
 
-    @DeleteMapping("/{id}")
-    public void deleteStudent(@PathVariable Long id) { 
-        // Vérifier si l'étudiant existe
-        Student existingStudent = studentService.getStudentById(id);
-        if (existingStudent == null) {
-           return ResponseEntity.notFound().build(); // Returns HTTP 404
-        }
-        studentService.deleteStudent(id); 
+@DeleteMapping("/{id}")
+public ResponseEntity<Void> deleteStudent(@PathVariable Long id) { 
+    Student existingStudent = studentService.getStudentById(id);
+    if (existingStudent == null) {
+        return ResponseEntity.notFound().build(); // HTTP 404
     }
+    studentService.deleteStudent(id);
+    return ResponseEntity.ok().build(); // HTTP 200
+}
 }
