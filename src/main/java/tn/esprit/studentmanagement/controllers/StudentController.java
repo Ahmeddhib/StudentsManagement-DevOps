@@ -24,7 +24,7 @@ public class StudentController {
     public Student getStudent(@PathVariable Long id) { 
         Student student = studentService.getStudentById(id);
         if (student == null) {
-            throw new RuntimeException("Student not found with id: " + id); // Gérer le cas null
+            return ResponseEntity.notFound().build(); // Returns HTTP 404
         }
         return student; 
     }
@@ -39,7 +39,7 @@ public class StudentController {
         // Vérifier si l'étudiant existe
         Student existingStudent = studentService.getStudentById(id);
         if (existingStudent == null) {
-            throw new RuntimeException("Student not found with id: " + id);
+            return ResponseEntity.notFound().build(); // Returns HTTP 404
         }
         student.setIdStudent(id); // S'assurer que l'ID est correct
         return studentService.saveStudent(student);
@@ -50,7 +50,7 @@ public class StudentController {
         // Vérifier si l'étudiant existe
         Student existingStudent = studentService.getStudentById(id);
         if (existingStudent == null) {
-            throw new RuntimeException("Student not found with id: " + id);
+           return ResponseEntity.notFound().build(); // Returns HTTP 404
         }
         studentService.deleteStudent(id); 
     }
